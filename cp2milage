@@ -1,0 +1,26 @@
+#!/usr/bin/awk -f
+BEGIN {
+	ERR_WRONG_NUMBER_OF_ARGS = 1
+	ERR_CHECKPOINT_FILE_NOT_FOUND = 2
+
+	if (ARGC != 2) {
+		printf "Usage: checkpoint-to-milage <CHECKPOINT_SCRIPT_FILE>\n" >"/dev/stderr"
+		exit ERR_WRONG_NUMBER_OF_ARGS
+	}
+
+	scr_file = ARGV[1]
+	if (0 == system("[ ! -f " scr_file " ]")) {
+		printf("Cannot find checkpoint script file \"%s\".\n", scr_file) >"/dev/stderr"
+		exit ERR_CHECKPOINT_FILE_NOT_FOUND
+	}
+
+	FS = "[ ,]"
+	zratio = 2
+}
+
+$1 == "POINT" {
+	k = int($2 / 1000)
+	remain = $2 % 1000
+	printf "K%s+%s,%.03f\r\n", k, remain, $3/zratio
+}
+

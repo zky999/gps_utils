@@ -1,0 +1,75 @@
+#!/usr/bin/env bash
+[[ $# -lt 2 ]] && {
+    printf "Usage:\n\t%s <POINT_NAME_FILE> [POINT_NAME_FILE ...] <GPS_FILE>\n\n" \
+	"$(basename "$0")" >&2
+    printf "\tPOINT_NAME_FILE contains lines of points' names separated by commas.\n" >&2
+    printf "\tGPS_FILE contains lines of points' info separated by commas. The points' info including point's name, x-, y- and z-coordinates.\n" >&2
+    exit
+}
+
+argv=("$@")
+gpsfile="${argv[$(($#-1))]}"
+[[ ! -f "$gpsfile" ]] && {
+    printf "Cannot access GPS file \"%s\", exit\n" "$gpsfile" >&2
+    exit
+}
+
+for ((idx=0; idx<$(($#-1)); idx++)); do
+    namefile="${argv[$idx]}"
+    [[ ! -f "$namefile" ]] && {
+		printf "Cannot access name file \"%s\", process next name file\n" "$namefile" >&2
+		continue
+    }
+
+    line_count=1
+    while read names_line; do
+	printf "Finding points claimed in line %s of name file \"%s\" from GPS file \"%s\"...\n" \
+	    "$line_count" "$namefile" "$gpsfile" >&2
+
+	[[ -z "$names_line" ]] && {
+	    printf "Line %s is blank, skipped.\n" "$line_count" >&2
+	    continue
+	}
+
+	claimed_have_name="$(awk -F ',' '{print NF}' <<<"$names_line")"
+
+	pt_names="$(awk -F ',' '{for (i=1; i<=NF; i++) print $i}' <<< "$names_line")"
+
+	namefile_basename="$(basename "$namefile")"
+	name_of_namefile="${namefile_basename%.*}"
+	gpsfile_basename="$(basename "$gpsfile")"
+	name_of_gpsfile="${gpsfile_basename%.*}"
+	outfile="${name_of_gpsfile}_${name_of_namefile}_line${line_count}.pts"
+
+	rm -f "$outfile"
+
+	real_found_name=0
+	while read pt_name; do
+	    pt_info_line="$(grep -w "^${pt_name}," "$gpsfile")"
+
+	    [[ -z "$pt_info_line" ]] && {
+			printf "ERROR: Did not find point \"%s\"\n" "$pt_name" >&2
+	    } || {
+			((real_found_name++))
+			printf "%s\n" "$pt_info_line"
+			printf "%s\n" "$pt_info_line" >>"$outfile" 
+	    }
+
+	    [[ "$(wc -l <<<"$pt_info_line" |awk '{print $1}')" -gt 1 ]] && {
+			printf "WARRNING: Found more than one records for name \"%s\"\n" "$pt_name" >&2
+	    }
+	done <<<"$pt_names"
+
+	printf "Line %s claims having %s points and we found %s points\n" \
+	    "$line_count" "$claimed_have_name" \
+	    "$real_found_name" >&2	
+
+	[[ "$claimed_have_name" -eq "$real_found_name" ]] \
+	    && printf "Processed line %s successfully\n" "$line_count" >&2 \
+	    || printf "Processed line %s failed\n" "$line_count" >&2
+	
+	printf "All points found have been written to \"%s\"\n\n" "$outfile" >&2
+
+	((line_count++))
+    done <"$namefile"
+done

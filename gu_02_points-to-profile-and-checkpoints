@@ -1,0 +1,19 @@
+#!/usr/bin/env bash
+[[ $# -lt 1 ]] && {
+	printf "Please specify at least one point file!\n" >&2
+	exit 1
+}
+
+p2s_with_checkpoints_executable="p2s-with-checkpoints"
+[[ ! -f ${p2s_with_checkpoints_executable} ]] && {
+	printf "Cannot found p2s-with-checkpoints executable.\n" >&2
+	exit 2
+}
+
+for point_file in "$@"; do 
+	printf "Processing point file \"%s\"...\n" "$point_file"
+	line_out_file="${point_file%.*}_profileline.scr"
+	checkpoint_out_file="${point_file%.*}_checkpoints.scr"
+	rm -f "$line_out_file" "$checkpoint_out_file" 
+	${p2s_with_checkpoints_executable} "$point_file" "$line_out_file" "$checkpoint_out_file" 50
+done

@@ -1,0 +1,22 @@
+#!/usr/bin/env bash
+ERR_WRONG_NUMBER_OF_ARGS=1
+ERR_CHECKPOINT_FILE_NOT_FOUND=2
+
+if [[ $# -eq 0 ]]; then
+	printf "Usage: checkpoint-to-milage <CHECKPOINT_SCRIPT_FILE> [CHECKPOINT_SCRIPT_FILE> ...]" >&2
+	exit $ERR_WRONG_NUMBER_OF_ARGS
+fi
+
+checkpoint_to_milage_executable=/cygdrive/c/Users/Haibo/Desktop/shengli/bin/cp2milage
+for checkpoint_file in "$@"; do
+	if [[ -f "$checkpoint_file" ]]; then
+		printf "Process %s...\n" "$checkpoint_file"
+		cpfile_basename="$(basename "$checkpoint_file")"
+		cpfile_out="${cpfile_basename%.*}_milage.txt"
+		${checkpoint_to_milage_executable} "$checkpoint_file" >"$cpfile_out"
+		printf "Milages had been written to %s\n" "$cpfile_out"
+	else
+		printf "Cannot find checkpoint file \"%s\".\n" "$checkpoint_file" >&2
+		exit $ERR_CHECKPOINT_FILE_NOT_FOUND
+	fi	
+done

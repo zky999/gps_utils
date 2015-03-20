@@ -1,0 +1,218 @@
+#!/usr/bin/awk -f
+# p2s-with-checkpoint: a awk script that prouduces the profile line and checkpoints from a point file
+# profile line: polyline of a series of (x, z) caculated from the point file
+# checkpoints: a group of (x, z) points whose x usually an arithmetic progression sequence, such as 0, 50, 100, ...
+ 
+BEGIN {
+	# exit code definition
+	ERR_ARGC = 1
+	ERR_INPUT_POINT_FILE_NOT_FOUND = 2
+
+	# number of arguments checking
+	if (ARGC != 4 && ARGC != 5) {
+		printf "Usage: p2s-with-checkpoint \
+<POINT_FILE_IN> \
+<LINE_FILE_OUT> \
+<CHECKPOINT_FILE_OUT> \
+[CHECKPOINT_INTERVAL]\n" \
+		>"/dev/stderr"
+		exit ERR_ARGC
+	}
+	
+	# read the file names
+	point_file_in=ARGV[1]
+
+	line_file_out=ARGV[2]
+	delete ARGV[2]
+	ARGC--
+
+	checkpoint_file_out=ARGV[3]
+	delete ARGV[3]
+	ARGC--
+
+	ARGV[4] ~ /^[1-9][0-9]*$/ ? cp_interval = ARGV[4] : cp_interval = 50
+	delete ARGV[4]
+	ARGC--
+
+	if (0 == system("[ ! -f " point_file_in " ]")) {
+		printf("Input point file \"%s\" cannot be found!\n", point_file_in) >"/dev/stderr"
+		exit ERR_INPUT_POINT_FILE_NOT_FOUND
+	} 
+
+	# point file's field separator	
+	FS = ","
+
+	# total valid point of profile line
+	count_pl = 0
+
+	# total checkpoints
+	count_cp = 0
+
+	# parameters
+	# multiplier of z
+	zratio = 2
+	# the interval of checkpoint
+	cp_interval = 50
+	# label size
+	text_size = 1.2
+	# label angle
+	text_angle = 0
+
+	# first command to plot the profile line
+	printf "PLINE\n" >line_file_out
+	
+	# initial settings of checkpoints plotting
+	# point symbol
+	# PDMODE 0 a point
+	# PDMODE 1 nothing
+	# PDMODE 2 a + sign
+	# PDMODE 3 an X sign
+	# PDMODE 32 a circle
+	# PDMODE 34 a circle with a + sign
+	
+	printf "PDMODE\n34\n" >>checkpoint_file_out
+	
+	# point size
+	# PDSIZE affects the size of the point symbol. If PDSIZE is set to a positive number then that is the absolute size of the points symbol. If PDSIZE is negative then the size is a % of the screen size. 
+	printf "PDSIZE\n4\n" >>checkpoint_file_out
+	
+	# text offset
+	text_offset_x = 0
+	text_offset_y = 0
+}
+
+# read the x, y and z of one end point of a segement line
+FNR % 2 == 1 {
+	x1 = $3
+	y1 = $4
+	z1 = $5
+}
+
+# read the x, y and z of the other end point of a segement line
+FNR % 2 == 0 {
+	x2 = $3
+	y2 = $4
+	z2 = $5
+}
+
+# the first point of the profile line
+FNR == 1 {
+	# first point of the profile line
+	x = 0
+	z = z1 * zratio
+
+	# initialize the max and min caculation
+	max_x = 0
+	max_z = z / zratio
+	min_x = 0
+	min_z = z / zratio
+
+	# save the first point of profile line
+	printf("%s,%s\n", x, z) >>line_file_out
+	
+	# counting the first point of profile line
+	count_pl++
+
+	# first end point to calculate the "middle" checkpoint
+	cpx1 = 0
+	cpz1 = z
+
+	# since this is the first point,
+	# the checkpoint is the same as the the first point of profile line
+	# save the first checkpoint: profile length equals 0
+	cpx = cpx1
+	cpz = cpz1
+	
+	# plot the first checkpoint
+	printf("POINT ") >>checkpoint_file_out
+	#printf("CIRCLE\n") >>checkpoint_file_out
+	printf("%s,%s\n", cpx, cpz) >>checkpoint_file_out
+	#printf("5\n") >>checkpoint_file_out
+	#printf("REDRAW\n") >>checkpoint_file_out
+	
+	# label the first checkpoint's coordinates
+	printf("TEXT ") >>checkpoint_file_out
+	printf("%s,%s ", cpx + text_offset_x, cpz + text_offset_y) >>checkpoint_file_out
+	printf("%s %s ", text_size, text_angle) >>checkpoint_file_out
+	printf("%.2f\n", cpz/2) >>checkpoint_file_out
+
+	# counting the first checkpoint
+	count_cp++
+}
+
+# the rest portion of the profile line and checkpoints
+FNR > 1 {
+	# the "increasing" profile length
+	x = x + sqrt((x2-x1)^2 + (y2 -y1)^2)
+	
+	# set the "right" point as the other endpoint of profile line
+	if (FNR % 2 == 1)
+		z = z1 * zratio
+	else
+		z = z2 * zratio
+
+	# caculate the max and min z of profile line
+	if (max_z < z / zratio) {
+		max_z = z / zratio
+		max_x = x
+	}
+	if (min_z > z / zratio) {
+		min_z = z / zratio
+		min_x = x
+	}
+
+	# update the other endpoint of checkpoint to current profile point
+	cpx2 = x
+	cpz2 = z
+
+	# check whether the two endpoints of checkpoints "contains" checkpoints
+	# if "Contains" at least one checkpoint
+	# then step forward all the checkpoints between the two endpoints of profile line	
+	while (cpx + cp_interval >= cpx1 && cpx + cp_interval <= cpx2) {
+		# update the total length of all checkpoints
+		cpx = cpx + cp_interval
+
+		# caclulate cpz
+		# (cpz-cpz1)/(cpx-cpx1) = (cpz2-cpz1)/(cpx2-cpx1)
+		cpz = (cpz2 - cpz1) / (cpx2 - cpx1) * (cpx - cpx1) + cpz1
+
+		# save checkpoint
+		# plot a point
+		printf("POINT ") >>checkpoint_file_out
+		#printf("CIRCLE\n") >>checkpoint_file_out
+		printf("%s,%s\n", cpx, cpz) >>checkpoint_file_out
+		#printf("5\n") >>checkpoint_file_out
+		#printf("REDRAW\n") >>checkpoint_file_out
+
+		# label the first checkpoint's coordinates
+		printf("TEXT ") >>checkpoint_file_out
+		printf("%s,%s ", cpx + text_offset_x, cpz + text_offset_y) >>checkpoint_file_out
+		printf("%s %s ", text_size, text_angle) >>checkpoint_file_out
+		printf("%.2f\n", cpz/2) >>checkpoint_file_out
+
+		# counting checkpoints
+		count_cp++
+	}
+
+	# update the first endpoint of checkpoints
+	# ready for process next profile line segementaion 
+	cpx1 = cpx2
+	cpz1 = cpz2
+
+	# save the the endpoint of profile line
+	printf("%s,%s\n", x, z) >line_file_out
+	
+	# count the total valid points of profile line	
+	count_pl++
+}
+
+END {
+	printf "\n" >>line_file_out
+	#printf "\n" >>checkpoint_file_out
+
+	printf "%28s: %d\n", "Total points of profile line", count_pl >"/dev/stderr"
+	printf "%28s: (%.3f, %.3f)\n", "Max (x, z) of profile line", max_x, max_z >"/dev/stderr"
+	printf "%28s: (%.3f, %.3f)\n", "Min (x, z) of profile line", min_x, min_z >"/dev/stderr"
+	printf "%28s: %d\n", "Total checkpoints", count_cp >"/dev/stderr"
+}
+

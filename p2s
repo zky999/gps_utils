@@ -1,0 +1,65 @@
+#!/usr/bin/awk -f
+BEGIN {
+	FS = ","
+	count = 0
+	zratio = 2
+	
+	#printf "LINE\n"
+	printf "PLINE\n"
+}
+
+FNR % 2 == 1 {
+	x1 = $3
+	y1 = $4
+	z1 = $5
+}
+
+FNR % 2 == 0 {
+	x2 = $3
+	y2 = $4
+	z2 = $5
+}
+
+FNR == 1 {
+	x = 0
+	z = z1 * zratio
+
+	max_x = 0
+	max_z = z / zratio
+	min_x = 0
+	min_z = z / zratio
+
+	count++
+
+	printf "%s,%s\n", x, z
+}
+
+FNR > 1 {
+	x = x + sqrt((x2-x1)^2 + (y2 -y1)^2)
+
+	if (FNR % 2 == 1)
+		z = z1 * zratio
+	else
+		z = z2 * zratio
+
+	if (max_z < z / zratio) {
+		max_z = z / zratio
+		max_x = x
+	}
+	if (min_z > z / zratio) {
+		min_z = z / zratio
+		min_x = x
+	}
+	
+	count++
+
+	printf "%s,%s\n", x, z
+}
+
+END {
+	printf "\n"
+	printf "Total points: %d\n", count >"/dev/stderr"
+	printf "Max (x, z): (%s, %s)\n", max_x, max_z >"/dev/stderr"
+	printf "Min (x, z): (%s, %s)\n", min_x, min_z >"/dev/stderr"
+}
+

@@ -1,0 +1,22 @@
+#!/usr/bin/awk -f
+BEGIN { 
+	FS = ","
+
+	x = 0
+	interval = 50
+	vertical_offset = -4
+}
+
+{
+	#printf "TEXT "
+	x = x + interval
+	#printf "%s,0 ", x
+	#printf "1.2 0 "
+	#printf "%s\n", $1
+
+	printf "TEXT "
+	printf "%s,%s ", x, vertical_offset
+	printf "1.2 0 "
+	printf "%s\n", $2
+}
+
